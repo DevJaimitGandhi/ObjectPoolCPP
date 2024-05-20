@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <queue>
 
 using namespace std;
 
@@ -19,37 +20,44 @@ public:
 	}
 };
 
+/*
+*	To make Object pool thread safe, we have to apply mutual exclusion (mutex)
+*	for public methods of acquiring and releasing the objects.
+* 
+*	Here, we will use "ObjectPoolSingletonClass.cpp and modify that class".
+*/
 
-static class ObjectPoolSingleton
+static class ObjectPoolThreadSafe
 {
 private: //variables
 	static const uint8_t m_maxNoOfObjs = 3;
 	vector<unique_ptr<Object>> m_objectPool;
 
-	static ObjectPoolSingleton* m_poolClassObj;
+	static ObjectPoolThreadSafe* m_poolClassObj;
 	static std::mutex m_mtx;
 
-	
+	std::mutex m_threadSafeMtx;
+
 
 private: //methods
-	ObjectPoolSingleton()
+	ObjectPoolThreadSafe()
 	{
 		for (int i = 0; i < m_maxNoOfObjs; ++i)
 		{
 			m_objectPool.emplace_back(make_unique<Object>());
 		}
 	}
-	~ObjectPoolSingleton()
+	~ObjectPoolThreadSafe()
 	{
 
 	}
 public:
-	static ObjectPoolSingleton* getPoolClassObject()
+	static ObjectPoolThreadSafe* getPoolClassObject()
 	{
 		/*
 		* We are using "DOUBLE CHECK LOCKING MECHANISM" for Singleton class.
 		* This is also known as "Lazy initialization of Singleton class"
-		* 
+		*
 		* If we want to use Early initialization of Singleton class then
 		*  no need to do double check locking mechanism.
 		* We have to intialize class object when our application starts.
@@ -59,7 +67,7 @@ public:
 			std::lock_guard<mutex> lck(m_mtx);
 			if (m_poolClassObj == nullptr)
 			{
-				m_poolClassObj = new ObjectPoolSingleton();
+				m_poolClassObj = new ObjectPoolThreadSafe();
 			}
 		}
 
@@ -68,6 +76,7 @@ public:
 
 	Object* acquireObject()
 	{
+		std::lock_guard<std::mutex> lck(m_threadSafeMtx);
 		if (m_objectPool.size())
 		{
 			Object* obj = std::move(m_objectPool.back()).get();
@@ -87,6 +96,7 @@ public:
 
 	bool releaseObject(Object* obj)
 	{
+		std::lock_guard<std::mutex> lck(m_threadSafeMtx);
 		if (obj == nullptr)
 		{
 			cout << "releaseObject -> Object can not be empty.\n";
@@ -103,32 +113,44 @@ public:
 	}
 };
 
-ObjectPoolSingleton* ObjectPoolSingleton::m_poolClassObj = nullptr;
-mutex ObjectPoolSingleton::m_mtx;
+ObjectPoolThreadSafe* ObjectPoolThreadSafe::m_poolClassObj = nullptr;
+mutex ObjectPoolThreadSafe::m_mtx;
 
-#if 0
+static void workerMethod()
+{
+	ObjectPoolThreadSafe* pool = ObjectPoolThreadSafe::getPoolClassObject();
+	for (int i = 0; i < 10; ++i)
+	{
+		auto obj = pool->acquireObject();
+
+		/*
+			To create some task, we are making thread sleep.
+			Think of it like worker thread is doing some task.
+		*/
+		std:: this_thread::sleep_for(std::chrono::microseconds(1));
+
+		pool->releaseObject(obj);
+	}
+}
+
+#if 1
 int main()
 {
-	ObjectPoolSingleton* pool = ObjectPoolSingleton::getPoolClassObject();
+	queue<thread> collectionOfThreadQueue;
+	for (int i = 0; i < 10; ++i)
+	{
+		//thread t(workerMethod);
+		
+		collectionOfThreadQueue.push(thread(workerMethod));
+	}
 
-	auto obj1 = pool->acquireObject();
-	auto obj2 = pool->acquireObject();
-	auto obj3 = pool->acquireObject();
+	while (collectionOfThreadQueue.size())
+	{
+		collectionOfThreadQueue.front().join();
+		collectionOfThreadQueue.pop();
+	}
 
-	//Total object already acuried. So, pool will create new object.
-	auto obj4 = pool->acquireObject();
-
-	obj1->printHello(1);
-	obj2->printHello(2);
-	obj3->printHello(3);
-	obj4->printHello(4);
-
-	pool->releaseObject(obj1);
-	pool->releaseObject(obj2);
-	pool->releaseObject(obj3);
-
-	//Pool is full. So, it can not accomodate this object.
-	pool->releaseObject(obj4);
+	cout << "Task completed\n";
 
 	return 0;
 }

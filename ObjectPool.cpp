@@ -12,6 +12,11 @@ static class Object
 public:
 	Object() = default;
 	~Object() = default;
+
+	void printHello(const uint8_t number)
+	{
+		cout << "Hello From -> " << std::to_string(number) << "\n";
+	}
 };
 
 
@@ -56,9 +61,9 @@ public:
 	{
 		if (m_objectPool.size())
 		{
-			unique_ptr<Object> obj = std::move(m_objectPool.back());
+			Object* obj = std::move(m_objectPool.back()).get();
 			m_objectPool.pop_back();
-			return obj.get();
+			return obj;
 		}
 
 		/*
@@ -68,7 +73,7 @@ public:
 			then wait here till pools get available objects.
 		*/
 		cout << "acquireObject -> Pool is full. So creating new object\n";
-		return make_unique<Object>().get();
+		return new Object();
 	}
 
 	bool releaseObject(Object* obj)
@@ -100,6 +105,11 @@ int main()
 
 	//Total object already acuried. So, pool will create new object.
 	auto obj4 = pool.acquireObject();
+
+	obj1->printHello(1);
+	obj2->printHello(2);
+	obj3->printHello(3);
+	obj4->printHello(4);
 
 	pool.releaseObject(obj1);
 	pool.releaseObject(obj2);
