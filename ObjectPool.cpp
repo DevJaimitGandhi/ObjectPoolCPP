@@ -7,7 +7,7 @@
 
 using namespace std;
 
-class Object
+static class Object
 {
 public:
 	Object() = default;
@@ -22,7 +22,7 @@ public:
 	2.) Websocket connection object pool for Stock Trading broker with NSE/BSE.
 	3.) Bulky object creation.
 */
-class ObjectPool
+static class ObjectPool
 {
 
 private:
@@ -67,7 +67,7 @@ public:
 			If our application doesn't allow to create new object
 			then wait here till pools get available objects.
 		*/
-		cout << "Pool is full. So creating new object\n";
+		cout << "acquireObject -> Pool is full. So creating new object\n";
 		return make_unique<Object>().get();
 	}
 
@@ -75,12 +75,12 @@ public:
 	{
 		if (obj == nullptr)
 		{
-			cout << "Object can not be empty.\n";
+			cout << "releaseObject -> Object can not be empty.\n";
 			return false;
 		}
 
 		if (m_objectPool.size() >= m_maxPoolCapacity) {
-			cout << "Pool is full. So we can not put this object into pool.\n";
+			cout << "releaseObject -> Pool is full. So we can not put this object into pool.\n";
 			return false;
 		}
 
@@ -89,7 +89,7 @@ public:
 	}
 };
 
-#if 1
+#if 0
 int main()
 {
 	ObjectPool pool(3);
